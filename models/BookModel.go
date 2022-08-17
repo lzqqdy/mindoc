@@ -899,6 +899,14 @@ func (book *Book) ImportBook(zipPath string, lang string) error {
 				doc.DocumentName = strings.TrimSpace(docName)
 
 				parentId := 0
+				
+				//如果是Markdown文件
+				if strings.EqualFold(ext, ".md") {
+					doc.DocumentName = strings.TrimSuffix(docIdentify, ".md")
+				}
+				if strings.EqualFold(ext, ".markdown") {
+					doc.DocumentName = strings.TrimSuffix(docIdentify, ".markdown")
+				}
 
 				parentIdentify := strings.Replace(strings.Trim(strings.TrimSuffix(strings.TrimPrefix(path, tempPath), info.Name()), "/"), "/", "-", -1)
 
@@ -947,7 +955,7 @@ func (book *Book) ImportBook(zipPath string, lang string) error {
 				parentDoc.BookId = book.BookId
 				parentDoc.Identify = identify
 				parentDoc.Version = time.Now().Unix()
-				parentDoc.DocumentName = "空白文档"
+				parentDoc.DocumentName = info.Name()
 
 				parentId := 0
 
