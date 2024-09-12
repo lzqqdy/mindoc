@@ -20,7 +20,6 @@ import (
 	beegoCache "github.com/beego/beego/v2/client/cache"
 	_ "github.com/beego/beego/v2/client/cache/memcache"
 	"github.com/beego/beego/v2/client/cache/redis"
-	_ "github.com/beego/beego/v2/client/cache/redis"
 	"github.com/beego/beego/v2/client/orm"
 	"github.com/beego/beego/v2/core/logs"
 	"github.com/beego/beego/v2/server/web"
@@ -144,11 +143,17 @@ func RegisterModel() {
 	gob.Register(models.Document{})
 	gob.Register(models.Template{})
 	//migrate.RegisterMigration()
+	err := orm.RunSyncdb("default", false, true)
+	if err != nil {
+		logs.Error("注册Model失败 ->", err)
+		os.Exit(1)
+	}
 }
 
 // RegisterLogger 注册日志
 func RegisterLogger(log string) {
 
+	logs.Reset()
 	logs.SetLogFuncCall(true)
 	_ = logs.SetLogger("console")
 	logs.EnableFuncCallDepth(true)
@@ -228,6 +233,9 @@ func RegisterCommand() {
 		Install()
 	} else if len(os.Args) >= 2 && os.Args[1] == "version" {
 		CheckUpdate()
+		os.Exit(0)
+	} else if len(os.Args) >= 2 && os.Args[1] == "update" {
+		Update()
 		os.Exit(0)
 	}
 

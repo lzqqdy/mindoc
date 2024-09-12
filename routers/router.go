@@ -154,6 +154,7 @@ func init() {
 	web.Router("/manager/books/open", &controllers.ManagerController{}, "post:PrivatelyOwned")
 
 	web.Router("/manager/attach/list", &controllers.ManagerController{}, "*:AttachList")
+	web.Router("/manager/attach/clean", &controllers.ManagerController{}, "post:AttachClean")
 	web.Router("/manager/attach/detailed/:id", &controllers.ManagerController{}, "*:AttachDetailed")
 	web.Router("/manager/attach/delete", &controllers.ManagerController{}, "post:AttachDelete")
 	web.Router("/manager/label/list", &controllers.ManagerController{}, "get:LabelList")
@@ -192,6 +193,7 @@ func init() {
 	web.Router("/book/:key/release", &controllers.BookController{}, "post:Release")
 	web.Router("/book/:key/sort", &controllers.BookController{}, "post:SaveSort")
 	web.Router("/book/:key/teams", &controllers.BookController{}, "*:Team")
+	web.Router("/book/updatebookorder", &controllers.BookController{}, "post:UpdateBookOrder")
 
 	web.Router("/book/create", &controllers.BookController{}, "*:Create")
 	web.Router("/book/itemsets/search", &controllers.BookController{}, "*:ItemsetsSearch")
