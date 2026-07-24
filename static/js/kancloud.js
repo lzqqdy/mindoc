@@ -153,6 +153,7 @@ function renderPage($data) {
     $("#article-info").text($data.doc_info);
     $("#view_count").text("阅读次数：" + $data.view_count);
     $("#doc_id").val($data.doc_id);
+    updateEditLink($data.doc_id);
     checkMarkdownTocElement();
     if ($data.page) {
         loadComment($data.page, $data.doc_id);
@@ -168,6 +169,19 @@ function renderPage($data) {
         $("#view_container").addClass($data.markdown_theme)
     }
 
+}
+
+function updateEditLink($docid) {
+    var $editLink = $("#editDocumentLink");
+    var normalizedDocId = parseInt($docid, 10);
+
+    if ($editLink.length === 0 || !window.editURL || !normalizedDocId) {
+        return;
+    }
+
+    window.currentDocumentId = normalizedDocId;
+    var baseURL = window.editURL.replace(/\/+$/, '');
+    $editLink.attr("href", baseURL + "/" + normalizedDocId);
 }
 
 /***
@@ -242,14 +256,33 @@ function initHighlighting() {
 }
 
 function handleEvent(event) {
+    var target = event.target;
+    var tagName = target.tagName.toLowerCase();
+    var isInputElement = tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+    var isContentEditable = target.isContentEditable || target.contentEditable === 'true';
+
+    // ESC 关闭搜索面板，无论焦点在哪里都生效
+    if (event.keyCode === 27) {
+        $(".navg-item[data-mode='view']").click();
+        if (isInputElement) {
+            target.blur();
+        }
+        event.preventDefault();
+        return;
+    }
+
+    // 其他快捷键：焦点在输入框、textarea或可编辑元素中时不执行
+    if (isInputElement || isContentEditable) {
+        return;
+    }
+    
     switch (event.keyCode) {
-        case 70: // ctrl + f 打开搜索面板 并获取焦点
+        case 70: // f 打开搜索面板 并获取焦点，ctrl+f 留给浏览器原生搜索
+            if (event.ctrlKey || event.metaKey) {
+                return;
+            }
             $(".navg-item[data-mode='search']").click();
             document.getElementById('searchForm').querySelector('input').focus();
-            event.preventDefault();
-            break;
-        case 27: // esc 关闭搜索面板
-            $(".navg-item[data-mode='view']").click();
             event.preventDefault();
             break;
     }
@@ -257,6 +290,7 @@ function handleEvent(event) {
 
 $(function () {
     window.addEventListener('keydown', handleEvent)
+    updateEditLink(window.currentDocumentId);
 
     checkMarkdownTocElement();
     $(".view-backtop").on("click", function () {
@@ -274,15 +308,21 @@ $(function () {
             console.log(e);
         }
 
+        // 点击跳转期间暂停 scroll 驱动的 active 更新，避免竞争
+        if (window._tocClickScrolling) { return; }
+
         try {
-            var scrollTop = $("body").scrollTop();
+            // 滚动容器是 .manual-right，需用容器内的相对偏移量判断当前标题
+            var container = $(".manual-right");
+            var containerTop = container.offset().top;
             var oItem = $(".markdown-heading").find(".reference-link");
             var oName = "";
             $.each(oItem, function () {
                 var oneItem = $(this);
-                var offsetTop = oneItem.offset().top;
+                // 标题相对视口的 top，减去容器视口 top，即标题在容器内的可见位置
+                var offsetTop = oneItem.offset().top - containerTop;
 
-                if (offsetTop - scrollTop < 100) {
+                if (offsetTop < 100) {
                     oName = "#" + oneItem.attr("name");
                 }
             });
@@ -299,12 +339,66 @@ $(function () {
         } catch (e) {
             console.log(e);
         }
-    }).on("click", ".markdown-toc-list a", function () {
+    }).on("click", ".markdown-toc-list a", function (e) {
+        e.preventDefault();
         var $this = $(this);
-        setTimeout(function () {
-            $(".markdown-toc-list li").removeClass("directory-item-active");
-            $this.parents("li").addClass("directory-item-active");
-        }, 10);
+        var href = $this.attr("href");
+
+        // 立即同步设置选中状态，避免 scroll 事件竞争导致首次点击字色不变
+        $(".markdown-toc-list li").removeClass("directory-item-active");
+        $this.parents("li").addClass("directory-item-active");
+
+        if (href) {
+            var name = href.replace(/^#/, "");
+            var target = null;
+            // 1. 按 name 属性查找
+            var found = $("a[name='" + name + "']");
+            if (found.length > 0) {
+                target = found;
+            }
+            // 2. 按 id 查找
+            if (!target) {
+                var el = document.getElementById(name);
+                if (el) target = $(el);
+            }
+            // 3. 尝试带 h{n}- 前缀的id格式
+            if (!target) {
+                $("h1,h2,h3,h4,h5,h6").each(function() {
+                    if (this.id && this.id.replace(/^h\d-/, "") === name) {
+                        target = $(this);
+                        return false;
+                    }
+                });
+            }
+            // 4. 按标题文本匹配（兼容旧文档无锚点的情况）
+            if (!target) {
+                var linkText = $this.text().trim();
+                $(".markdown-heading, h1, h2, h3, h4, h5, h6", "#page-content").each(function() {
+                    var headingText = $(this).clone().children("a, span").remove().end().text().trim();
+                    if (!headingText) headingText = $(this).text().trim();
+                    if (headingText === linkText) {
+                        target = $(this);
+                        return false;
+                    }
+                });
+            }
+            if (target && target.length > 0) {
+                var container = $(".manual-right");
+                var scrollTo = target.offset().top - container.offset().top + container.scrollTop();
+                // 在 animate 调用前先设标志，确保整个动画期间 scroll 事件都被屏蔽
+                window._tocClickScrolling = true;
+                // 动画结束后延迟一点再放开，防止最后一帧 scroll 仍覆盖选中状态
+                container.animate({ scrollTop: scrollTo }, 200, function () {
+                    setTimeout(function () {
+                        window._tocClickScrolling = false;
+                    }, 50);
+                });
+                // 只用 replaceState 更新 URL，避免 location.hash 赋值触发 hashchange/页面跳转
+                if (history.replaceState) {
+                    history.replaceState(null, null, href);
+                }
+            }
+        }
     }).find(".markdown-toc-list li:eq(0)").addClass("directory-item-active");
 
 

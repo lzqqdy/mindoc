@@ -110,6 +110,7 @@ func (c *DocumentController) Index() {
 	c.Data["IS_DOCUMENT_INDEX"] = true
 	c.Data["Model"] = bookResult
 	c.Data["Result"] = template.HTML(tree)
+	c.Data["DocumentId"] = selected
 }
 
 // CheckPassword : Handles password verification for private documents,
@@ -214,8 +215,8 @@ func (c *DocumentController) Read() {
 	}
 	var PrevName, PrevPath, NextName, NextPath string
 	if index == 0 {
-		c.Data["PrevName"] = "没有了"
-		PrevName = "没有了"
+		c.Data["PrevName"] = ""
+		PrevName = ""
 	} else {
 		c.Data["PrevPath"] = identify + "/" + flat[index-1].Identify
 		c.Data["PrevName"] = flat[index-1].DocumentName
@@ -223,8 +224,8 @@ func (c *DocumentController) Read() {
 		PrevName = flat[index-1].DocumentName
 	}
 	if index == len(flat)-1 {
-		c.Data["NextName"] = "没有了"
-		NextName = "没有了"
+		c.Data["NextName"] = ""
+		NextName = ""
 	} else {
 		c.Data["NextPath"] = identify + "/" + flat[index+1].Identify
 		c.Data["NextName"] = flat[index+1].DocumentName
@@ -251,7 +252,7 @@ func (c *DocumentController) Read() {
 		data.DocId = doc.DocumentId
 		data.DocIdentify = doc.Identify
 		data.DocTitle = doc.DocumentName
-		data.Body = doc.Release + "<div class='wiki-bottom-left'>上一篇： <a href='/docs/" + PrevPath + "' rel='prev'>" + PrevName + "</a><br />下一篇： <a href='/docs/" + NextPath + "' rel='next'>" + NextName + "</a><br /></div>"
+		data.Body = doc.Release + "<div class='wiki-bottom-left'>" + i18n.Tr(c.Lang, "doc.prev") + "： <a href='/docs/" + PrevPath + "' rel='prev'>" + PrevName + "</a><br />" + i18n.Tr(c.Lang, "doc.next") + "： <a href='/docs/" + NextPath + "' rel='next'>" + NextName + "</a><br /></div>"
 		data.Title = doc.DocumentName + " - Powered by MinDoc"
 		data.Version = doc.Version
 		data.ViewCount = doc.ViewCount
@@ -283,7 +284,7 @@ func (c *DocumentController) Read() {
 	c.Data["Model"] = bookResult
 	c.Data["Result"] = template.HTML(tree)
 	c.Data["Title"] = doc.DocumentName
-	c.Data["Content"] = template.HTML(doc.Release + "<div class='wiki-bottom-left'>上一篇： <a href='/docs/" + PrevPath + "' rel='prev'>" + PrevName + "</a><br />下一篇： <a href='/docs/" + NextPath + "' rel='next'>" + NextName + "</a><br /></div>")
+	c.Data["Content"] = template.HTML(doc.Release + "<div class='wiki-bottom-left'>" + i18n.Tr(c.Lang, "doc.prev") + "： <a href='/docs/" + PrevPath + "' rel='prev'>" + PrevName + "</a><br />" + i18n.Tr(c.Lang, "doc.next") + "： <a href='/docs/" + NextPath + "' rel='next'>" + NextName + "</a><br /></div>")
 	c.Data["ViewCount"] = doc.ViewCount
 	c.Data["FoldSetting"] = "closed"
 	if bookResult.Editor == EditorCherryMarkdown {
@@ -324,9 +325,40 @@ func Flatten(list []*models.DocumentTree, flattened *[]DocumentTreeFlatten) {
 	return
 }
 
+func (c *DocumentController) resolveEditDocument(bookId int, id string) (*models.Document, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, nil
+	}
+
+	doc := models.NewDocument()
+	if docId, err := strconv.Atoi(id); err == nil {
+		doc, err = doc.FromCacheById(docId)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		doc, err = doc.FromCacheByIdentify(id, bookId)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if doc == nil || doc.DocumentId <= 0 || doc.BookId != bookId {
+		return nil, orm.ErrNoRows
+	}
+
+	return doc, nil
+}
+
 // 编辑文档
 func (c *DocumentController) Edit() {
 	c.Prepare()
+
+	if c.Member.Role == conf.MemberReaderRole {
+		c.JsonResult(6001, i18n.Tr(c.Lang, "message.no_permission"))
+	}
 
 	identify := c.Ctx.Input.Param(":key")
 	if identify == "" {
@@ -392,6 +424,21 @@ func (c *DocumentController) Edit() {
 	} else {
 		c.Data["UploadFileSize"] = "undefined"
 	}
+
+	selectedDocId := 0
+	if doc, err := c.resolveEditDocument(bookResult.BookId, c.Ctx.Input.Param(":id")); err != nil {
+		if err == orm.ErrNoRows || err == models.ErrDataNotExist {
+			c.ShowErrorPage(404, i18n.Tr(c.Lang, "message.doc_not_exist"))
+		} else {
+			logs.Error("resolveEditDocument => ", err)
+			c.ShowErrorPage(500, i18n.Tr(c.Lang, "message.system_error"))
+		}
+		return
+	} else if doc != nil {
+		selectedDocId = doc.DocumentId
+	}
+
+	c.Data["SelectedDocId"] = selectedDocId
 }
 
 // 创建一个文档

@@ -61,7 +61,7 @@ func (m *MemberRelationshipResult) ResolveRoleName(lang string) *MemberRelations
 	} else if m.RoleId == conf.BookEditor {
 		m.RoleName = i18n.Tr(lang, "common.editor")
 	} else if m.RoleId == conf.BookObserver {
-		m.RoleName = i18n.Tr(lang, "common.obverser")
+		m.RoleName = i18n.Tr(lang, "common.observer")
 	}
 	return m
 }
@@ -115,7 +115,7 @@ func (m *MemberRelationshipResult) FindNotJoinUsersByAccount(bookId, limit int, 
 func (m *MemberRelationshipResult) FindNotJoinUsersByAccountOrRealName(bookId, limit int, keyWord string) ([]*Member, error) {
 	o := orm.NewOrm()
 
-	sql := "SELECT m.* FROM md_members as m LEFT JOIN md_relationship as rel ON rel.member_id = m.member_id AND rel.book_id = ? WHERE rel.relationship_id IS NULL AND (m.real_name LIKE ? OR m.account LIKE ?) LIMIT 0,?;"
+	sql := "SELECT m.* FROM md_members as m LEFT JOIN md_relationship as rel ON rel.member_id = m.member_id AND rel.book_id = ? WHERE rel.relationship_id IS NULL AND (m.real_name LIKE ? OR m.account LIKE ?) LIMIT ? OFFSET 0;"
 
 	var members []*Member
 

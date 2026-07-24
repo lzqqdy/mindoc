@@ -175,7 +175,7 @@ func (c *ManagerController) ChangeMemberRole() {
 	if memberId <= 0 {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.param_error"))
 	}
-	if role != int(conf.MemberAdminRole) && role != int(conf.MemberGeneralRole) {
+	if role != int(conf.MemberAdminRole) && role != int(conf.MemberGeneralRole) && role != int(conf.MemberReaderRole) {
 		c.JsonResult(6001, i18n.Tr(c.Lang, "message.no_permission"))
 	}
 	member := models.NewMember()
@@ -483,6 +483,19 @@ func (c *ManagerController) Setting() {
 	for _, item := range options {
 		c.Data[item.OptionName] = item.OptionValue
 	}
+
+	i18nMapStrs, err := web.AppConfig.String("i18n_map")
+	if err != nil {
+		logs.Error("web.AppConfig `i18n_map` not found")
+		i18nMapStrs = "{}"
+	}
+	var i18nMap map[string]string
+	err = json.Unmarshal([]byte(i18nMapStrs), &i18nMap)
+	if err != nil {
+		logs.Error("json `i18nList` Unmarshal fail")
+		i18nMap = make(map[string]string)
+	}
+	c.Data["i18n_map"] = i18nMap
 }
 
 // Transfer 转让项目.
@@ -1004,15 +1017,14 @@ func (c *ManagerController) TeamChangeMemberRole() {
 	if memberId <= 0 || roleId <= 0 || teamId <= 0 || roleId > int(conf.BookObserver) {
 		c.JsonResult(5001, i18n.Tr(c.Lang, "message.param_error"))
 	}
-
 	teamMember, err := models.NewTeamMember().ChangeRoleId(teamId, memberId, conf.BookRole(roleId))
 
 	if err != nil {
 		c.JsonResult(5002, err.Error())
 	} else {
+		teamMember.SetLang(c.Lang).Include()
 		c.JsonResult(0, "OK", teamMember)
 	}
-
 }
 
 // 团队项目列表.
